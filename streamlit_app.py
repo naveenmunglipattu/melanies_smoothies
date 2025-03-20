@@ -1,88 +1,69 @@
-# Import python packages
-
 import streamlit as st
 
-from snowflake.snowpark.functions import col
+from snowflake.snowpark.context import get_active_session
 
-import requests
-
-# Write directly to the app
-
-st.title(":cup_with_straw: Customize Your Smoothie!:cup_with_straw:")
-
-st.write(
-
-    f""" Choose the fruits you want in a custom smoothie!
-
-""")
-
-import streamlit as st
+from snowflake.snowpark.functions import col,when_matched
  
-name_on_order = st.text_input("Name on Smoothie:")
+# Title with emoji
 
-st.write("The name on you Smoothie:", name_on_order)
+st.title("🥤 Pending Smoothie Orders! 🥤")
 
-cnx = st.connection("snowflake")
-
-session = cnx.session()
+st.write("Orders that need to be filled.")
  
-my_dataframe = session.table("smoothies.public.fruit_options").select(col('FRUIT_NAME'),col('SEARCH_ON'))
+# Get active Snowflake session
 
-#st.dataframe(data=my_dataframe, use_container_width=True)
-
-#st.stop()
+session = get_active_session()
  
-#Convert the Snowpark Datadframe to pandas dataframe so we can use the LOC function
+# Fetch pending orders (where ORDER_FILLED is False or NULL)
 
-pd_df=my_dataframe.to_pandas()
+my_dataframe = (
 
-#st.dataframe(pd_df)
+    session.table("smoothies.public.orders")
 
-#st.stop()
- 
-ingredients_list = st.multiselect(
+    .filter(col("ORDER_FILLED") == False)  # Fetch only unfilled orders
 
-    'Choose up to 5 ingredients:'
+    .select( col("order_uid"),col("INGREDIENTS"), col("NAME_ON_ORDER"), col("ORDER_FILLED"),col("order_ts"))
 
-   , my_dataframe
-
-    ,max_selections = 5
+    .to_pandas()  # Convert to Pandas for Streamlit
 
 )
  
-if ingredients_list:
+# Editable table (users can check the ORDER_FILLED box)
 
-    ingredients_string = ''
+editable_df = st.data_editor(my_dataframe)
  
-    for fruit_chosen in ingredients_list: 
+# Show the updated dataframe (optional)
 
-        ingredients_string += fruit_chosen + ' '
+#st.write("✅ Updated Order Status:")
 
-        search_on=pd_df.loc[pd_df['FRUIT_NAME'] == fruit_chosen, 'SEARCH_ON'].iloc[0]
-
-        #st.write('The search value for ', fruit_chosen,' is ', search_on, '.')
-
-        st.subheader(fruit_chosen + 'Nutrition_Information')
-
-        smoothiefroot_response = requests.get("https://my.smoothiefroot.com/api/fruit/" + search_on)
-
-        sf_df = st.dataframe(data=smoothiefroot_response.json(), use_container_width=True)
-
-    #st.write(ingredients_string)  
+#st.dataframe(editable_df)
  
-    my_insert_stmt = """ insert into smoothies.public.orders(ingredients,name_on_order)
+#to add a submit button
 
-            values ('""" + ingredients_string + """','"""+name_on_order+ """')"""
+submitted=st.button('submit')
  
-    #st.write(my_insert_stmt)
+ 
+if submitted:
 
-    #st.stop()
+    og_dataset = session.table("smoothies.public.orders")
 
-    time_to_insert = st.button('Submit Order')
+    edited_dataset = session.create_dataframe(editable_df)
+ 
+    try: 
 
-    if time_to_insert:
+        og_dataset.merge(
 
-        session.sql(my_insert_stmt).collect()
+        edited_dataset,
 
-        st.success('Your Smoothie is ordered!', icon="✅")
+        (og_dataset['ORDER_UID'] == edited_dataset['ORDER_UID']),
+
+        [when_matched().update({'ORDER_FILLED': edited_dataset['ORDER_FILLED']})]
+
+     )
+
+        st.success("Order's updated", icon="👍")
+ 
+    except Exception as e:
+
+        st.write("Something went wrong:", e)
  
