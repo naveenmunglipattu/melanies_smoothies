@@ -15,8 +15,18 @@ st.write(f"The name on your Smoothie will be: **{name_on_order}**")
 cnx = st.connection("snowflake")
 session = cnx.session()
 
-# Fetch fruit options from Snowflake
+# ✅ Get column names from the table
 try:
+    columns_df = session.sql("SHOW COLUMNS IN smoothies.public.fruit_options").collect()
+    column_names = [col.name for col in columns_df]  # Extract column names
+
+    # ✅ Verify column existence
+    required_columns = {"FRUIT_NAME", "SEARCH_ON"}
+    if not required_columns.issubset(set(column_names)):
+        st.error(f"❌ Missing required columns: {required_columns - set(column_names)}")
+        st.stop()
+    
+    # ✅ Fetch fruit options from Snowflake
     my_dataframe = session.sql("SELECT FRUIT_NAME, SEARCH_ON FROM smoothies.public.fruit_options").collect()
     pd_df = pd.DataFrame(my_dataframe)  # Convert to Pandas DataFrame
 except Exception as e:
