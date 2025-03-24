@@ -17,11 +17,11 @@ st.write("The name on your smoothiee will be", name_on_order)
 cnx = st.connection("snowflake")
 session = cnx.session()
 my_dataframe = session.table("smoothies.public.fruit_options").select(col('FRUIT_NAME'),col('SEARCH_ON'))
-#st.dataframe(data=my_dataframe, use_container_width=True)
-#st.stop()
+st.dataframe(data=my_dataframe, use_container_width=True)
+st.stop()
 
 # convert the snowpark dataframe to a panda datframe so we can use the Loc function
-pd_df =my_dataframe.to_pandas()
+#pd_df =my_dataframe.to_pandas()
 #st.my_dataframe(pd_df)
 #st.stop()
 
